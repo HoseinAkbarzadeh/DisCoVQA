@@ -6,7 +6,8 @@ import torch.nn as nn
 from models.swin_video import SwinVideo
 from models.components.transformer import *
 
-def create_pretrained_swint(pretrained_path=os.path.join(os.environ['SCRATCH_DIR'],'hub/swin_tiny_patch244_window877_kinetics400_1k.pth')):
+def create_pretrained_swint(pretrained_path=os.path.join(os.environ['SCRATCH_DIR'],
+                                                         'hub/swin_tiny_patch244_window877_kinetics400_1k.pth')):
     model = SwinVideo()
     
     state_dict = torch.load(pretrained_path)['state_dict']
@@ -98,10 +99,8 @@ class DisCoVQA(nn.Module):
         # input shape [nbatch, 3, sequence, height, width]
         # output shape [nbatch, sequence, features]
         x_d = self.stde(x)
-        breakpoint()
         # output shape [nbatch, sequence]
         x = self.tct(x_d).squeeze(-1)
-        breakpoint()
         # output shape [nbatch, sequence]
         x_d = self.temp_dist(x_d).squeeze(-1)
         # output shape [nbatch, sequence]

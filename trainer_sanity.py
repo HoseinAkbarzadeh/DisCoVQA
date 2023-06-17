@@ -28,10 +28,20 @@ def setup_cmd():
     parser.add_argument('--num_workers', type=int, required=True)
     parser.add_argument('--num_devices', type=int, nargs='*', required=False)
     parser.add_argument('--rng', type=int, default=42)
-    parser.add_argument('--config', type=str, default='config.toml')
-    parser.add_argument('--prefix', type=str, default='discovqa')
+    parser.add_argument('--config', type=str, default='sanity.toml')
+    parser.add_argument('--prefix', type=str, default='sanity')
+    parser.add_argument('--nbatch', type=int, default=1)
 
     return parser.parse_args()
+
+def reduce_ds(ds, size):
+    out = []
+    for idx, d in enumerate(ds):
+        if idx == size:
+            break
+        else:
+            out.append(d)
+    return out
 
 if __name__ == '__main__':
     args = setup_cmd()
@@ -100,6 +110,9 @@ if __name__ == '__main__':
 
     gen = torch.Generator().manual_seed(42)
     train_ds, val_ds = random_split(ds, [int(0.9*len(ds)), len(ds)-int(0.9*len(ds))], generator=gen)
+
+    train_ds = reduce_ds(train_ds, args.nbatch*conf['run']['batch_size'])
+    val_ds = reduce_ds(val_ds, args.nbatch*conf['run']['batch_size'])
 
     train_loader = DataLoader(train_ds, batch_size=conf['run']['batch_size'], shuffle=True, 
                               pin_memory=False, drop_last=False, num_workers=args.num_workers)
