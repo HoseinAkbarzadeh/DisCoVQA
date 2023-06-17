@@ -164,3 +164,4 @@ cython_debug/
 
 # pytorch state_dics
 *.pth
+*test*
