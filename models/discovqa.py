@@ -1,4 +1,4 @@
-
+import os
 
 import torch
 import torch.nn as nn
@@ -6,7 +6,7 @@ import torch.nn as nn
 from models.swin_video import SwinVideo
 from models.components.transformer import *
 
-def create_pretrained_swint(pretrained_path='hub/swin_tiny_patch244_window877_kinetics400_1k.pth'):
+def create_pretrained_swint(pretrained_path=os.path.join(os.environ['SCRATCH_DIR'],'hub/swin_tiny_patch244_window877_kinetics400_1k.pth')):
     model = SwinVideo()
     
     state_dict = torch.load(pretrained_path)['state_dict']
