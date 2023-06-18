@@ -20,7 +20,9 @@ class DisCoVQALightning(LightningModule):
         self.vqp = VQEGSuggestion(min_s=0, max_s=5)
 
     def forward(self, x):
+        breakpoint()
         x = self.neuralnet(x)
+        breakpoint()
         return self.vqp(x)
 
     def _shared_l1_loss(self, batch, batch_idx):

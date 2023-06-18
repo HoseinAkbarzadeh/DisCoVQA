@@ -99,7 +99,7 @@ if __name__ == '__main__':
         (lambda x: x.float().contiguous())
     ]
 
-    ds = LiveNFLXIIVideoHDF5.from_dataframe(
+    ds = LiveNFLXIIVideoHDF5.from_csv(
         csvfile=os.path.join(os.environ['PROJECT_DIR'], conf['dataset']['train_csv']), 
         hdf5file=os.path.join(os.environ['SCRATCH_DIR'], conf['dataset']['hdf5_file']), 
         metric='PMOS', 
