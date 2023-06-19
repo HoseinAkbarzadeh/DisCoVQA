@@ -113,15 +113,31 @@ class VQEGSuggestion(nn.Module):
     def __init__(self, min_s, max_s) -> None:
         super(VQEGSuggestion, self).__init__()
 
-        self.min_s = min_s
-        self.numerator = max_s - min_s
+        from torch.nn.parameter import Parameter
+
+        self.min_s = Parameter(torch.tensor(min_s).float())
+        self.max_s = Parameter(torch.tensor(max_s).float())
+        self.mean_t = Parameter(torch.tensor(0).float())
+        self.std_t = Parameter(torch.tensor(1).float())
+
 
     def forward(self, x):
         # input shape: [nbatch,]
-        x = 1. + torch.exp((x-x.mean())/x.std())
+        x = 1. + torch.exp((x-self.mean_t)/self.std_t)
         # output shape: [nbatch,]
-        return self.min_s + (self.numerator/x)
+        return self.min_s + ((self.max_s - self.min_s)/x)
+    
+class SigmoidReformulation(nn.Module):
+    def __init__(self, min_s, max_s) -> None:
+        super(SigmoidReformulation, self).__init__()
 
+        from torch.nn.parameter import Parameter
 
+        self.g1 = Parameter(torch.tensor(1).float())
+        self.g2 = Parameter(torch.tensor(0).float())
+        self.g3 = Parameter(torch.tensor(max_s-min_s).float())
+        self.g4 = Parameter(torch.tensor(min_s).float())
 
-
+    def forward(self, x):
+        x = torch.sigmoid(self.g1*x+self.g2)
+        return self.g3*x + self.g4

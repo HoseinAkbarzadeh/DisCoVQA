@@ -13,7 +13,7 @@ class DisCoVQALightning(LightningModule):
         super(DisCoVQALightning, self).__init__()
 
         self.save_hyperparameters()
-        self.example_input_array = torch.Tensor(1, 3, 16, 224, 224)
+        self.example_input_array = torch.Tensor(1, 3, 16, resolution, resolution)
 
         self.neuralnet = DisCoVQA(d_model=512, num_heads=1, sample_rate=8, dropout=0.0)
         # Video Quality Predictor

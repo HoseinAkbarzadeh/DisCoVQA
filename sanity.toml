@@ -2,7 +2,7 @@
 hdf5_file='LIVE_NFLX_PLUS/live_nflx_plus_frame.h5'
 train_csv='Datasets/LIVE_NFLX_II/tbl_df/live_nflx_ii_video_train.csv'
 test_csv='Datasets/LIVE_NFLX_II/tbl_df/live_nflx_ii_video_test.csv'
-train_max_len=267
+train_max_len=1069
 test_max_len=963
 
 [map]
