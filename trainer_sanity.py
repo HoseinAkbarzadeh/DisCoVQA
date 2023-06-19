@@ -87,7 +87,8 @@ if __name__ == '__main__':
         devices=devices,
         max_epochs=conf['run']['epoch'],
         logger=tb_logger,
-        callbacks=[ckpt_callback, RichProgressBar()]
+        callbacks=[ckpt_callback, RichProgressBar()],
+        log_every_n_steps=1
     )
 
     # preparation of train and val datasets
