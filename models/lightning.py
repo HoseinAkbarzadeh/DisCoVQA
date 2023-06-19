@@ -31,7 +31,9 @@ class DisCoVQALightning(LightningModule):
     
     def _draw_histogram(self) -> None:
         for name, param in self.neuralnet.named_parameters():
-            if 'bias' in name:
+            if param.view(-1).size(0) < 3:
+                continue
+            elif 'bias' in name:
                 self.logger.experiment.add_histogram(f"bias/{name}", param, global_step=self.current_epoch)
             else:
                 self.logger.experiment.add_histogram(f"weight/{name}", param, global_step=self.current_epoch)
