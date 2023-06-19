@@ -62,10 +62,10 @@ if __name__ == '__main__':
     torch.manual_seed(args.rng)
     torch.cuda.manual_seed_all(args.rng)
     seed_everything(args.rng, workers=True)
-    torch.set_float32_matmul_precision('medium')
+    torch.set_float32_matmul_precision('high')
 
     # setting the checkpointing callback
-    ckpt_callback = ModelCheckpoint(os.path.join(os.environ['PROJECT_DIR'] ,conf['map']['checkpoint_dir'], 
+    ckpt_callback = ModelCheckpoint(os.path.join(os.environ['PROJECT_DIR'] ,conf['map']['checkpoint_dir'], args.prefix,
                                                  os.environ['SLURM_JOB_ID'], f"proc{fabric.device}"),
                                     conf['map']['checkpoint_filename'],
                                     monitor='val_loss',

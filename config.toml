@@ -11,8 +11,8 @@ checkpoint_filename="discovqa"
 checkpoint_dir="checkpoints"
 
 [run]
-batch_size=16
+batch_size=12
 learning_rate=1e-3
-epoch=90
+epoch=2
 weight_decay=1e-3
-resolution=224
+resolution=112
