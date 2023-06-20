@@ -1,5 +1,5 @@
 
-from typing import Any, Optional
+from typing import Any
 
 from lightning.pytorch import LightningModule
 from lightning.pytorch.utilities.types import STEP_OUTPUT
@@ -29,8 +29,7 @@ class DisCoVQALightning(LightningModule):
 
     def _shared_l1_loss(self, batch, batch_idx):
         X, y = batch
-        y_hat = self(X)
-        breakpoint()
+        y_hat = self(X).squeeze(-1)
         loss = F.l1_loss(y_hat, y)
         return loss
     
