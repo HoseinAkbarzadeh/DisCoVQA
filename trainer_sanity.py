@@ -107,7 +107,8 @@ if __name__ == '__main__':
         metric='PMOS', 
         frame_transforms=img_tr, 
         tgt_transforms=lbl_tr, 
-        max_len=conf['dataset']['train_max_len']
+        max_len=conf['dataset']['train_max_len'],
+        interval=1
     )
 
     gen = torch.Generator().manual_seed(42)
