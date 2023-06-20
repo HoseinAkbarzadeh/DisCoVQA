@@ -88,7 +88,8 @@ if __name__ == '__main__':
         max_epochs=conf['run']['epoch'],
         logger=tb_logger,
         callbacks=[ckpt_callback, RichProgressBar()],
-        log_every_n_steps=1
+        log_every_n_steps=1,
+        gradient_clip_val=0.5
     )
 
     # preparation of train and val datasets
