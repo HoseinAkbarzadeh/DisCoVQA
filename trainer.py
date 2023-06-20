@@ -30,8 +30,22 @@ def setup_cmd():
     parser.add_argument('--rng', type=int, default=42)
     parser.add_argument('--config', type=str, default='config.toml')
     parser.add_argument('--prefix', type=str, default='discovqa')
+    parser.add_argument('--job_id', type=str, default=None)
 
     return parser.parse_args()
+
+def find_ckpt_dir(ckpt_dir, ckpt_filename):
+    import re
+    r = re.compile(f".*{ckpt_filename}.*")
+    last = re.compile(f".*last.*")
+    names = list(filter(r.match, os.listdir(ckpt_dir)))
+    best = list(filter(lambda x: not last.match(x) ,names))
+    last = list(filter(last.match, names))
+    best.sort()
+    last.sort()
+    return {'last': last, 'best': best}
+
+
 
 if __name__ == '__main__':
     args = setup_cmd()
@@ -46,6 +60,32 @@ if __name__ == '__main__':
     )
     fabric.launch()
 
+    # setting the checkpointing callback
+    if args.job_id is None:
+        job_id = os.environ['SLURM_JOB_ID']
+        ckpt_callback = ModelCheckpoint(os.path.join(os.environ['PROJECT_DIR'] ,conf['map']['checkpoint_dir'], args.prefix,
+                                                 job_id, f"proc{fabric.device}"),
+                                    conf['map']['checkpoint_filename'],
+                                    monitor='val_loss',
+                                    save_top_k=1,
+                                    save_last=True,
+                                    mode='min')
+        ckpt_path = None
+    else:
+        job_id = args.job_id
+        ckpt_callback = ModelCheckpoint(monitor='val_loss',
+                                    save_top_k=1,
+                                    save_last=True,
+                                    mode='min')
+        ckpt_path = find_ckpt_dir(os.path.join(os.environ['PROJECT_DIR'] ,conf['map']['checkpoint_dir'], args.prefix,
+                                                 job_id, f"proc{fabric.device}"), conf['map']['checkpoint_filename'])
+        if not ckpt_path['last']:
+            raise ValueError('No last checkpoint were found in the directory')
+        
+        ckpt_path = ckpt_path['last'][-1]
+
+        
+
     # making the training more deterministic and less variable
     random.seed(args.rng)
     np.random.seed(args.rng)
@@ -53,20 +93,11 @@ if __name__ == '__main__':
     torch.cuda.manual_seed_all(args.rng)
     seed_everything(args.rng, workers=True)
     torch.set_float32_matmul_precision('high')
-
-    # setting the checkpointing callback
-    ckpt_callback = ModelCheckpoint(os.path.join(os.environ['PROJECT_DIR'] ,conf['map']['checkpoint_dir'], args.prefix,
-                                                 os.environ['SLURM_JOB_ID'], f"proc{fabric.device}"),
-                                    conf['map']['checkpoint_filename'],
-                                    monitor='val_loss',
-                                    save_top_k=1,
-                                    save_last=True,
-                                    mode='min')
     
     # setting the tensorboard logger
     tb_logger = TensorBoardLogger(os.environ['PROJECT_DIR'],
                                   name= conf['map']['tb_logger_dir'],
-                                  version=f"{args.prefix}_{os.environ['SLURM_JOB_ID']}",
+                                  version=f"{args.prefix}_{job_id}",
                                   default_hp_metric=False)
 
     # creating the trainer
@@ -115,7 +146,7 @@ if __name__ == '__main__':
 
     # training the model
     print("Start Training")
-    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=ckpt_path)
 
     # finalizing the training
     print("Training is over.")

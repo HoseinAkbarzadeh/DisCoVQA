@@ -56,6 +56,7 @@ class TransformerDecoder(nn.Module):
         self.attn = nn.MultiheadAttention(d_model, num_heads, dropout, batch_first=True)
         self.l1 = nn.Linear(d_model, hid_dim)
         self.l2 = nn.Linear(hid_dim, out_dim)
+        self.norm = nn.LayerNorm(d_model)
 
         self.act = nn.GELU()
 
@@ -73,5 +74,5 @@ class TransformerDecoder(nn.Module):
         # output shpae: [nbatch, 1, features]
         x, _ = self.attn(x.repeat(1,y.size(1),1), y, y)
         # residual connection
-        x = x + t_en
+        x = self.norm(x + t_en)
         return self.l2(self.act(self.l1(x)))
