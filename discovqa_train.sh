@@ -5,6 +5,7 @@
 #SBATCH --cpus-per-task=6
 #SBATCH --mem-per-cpu=12G
 #SBATCH --time=0-04:00
+#SBATCH --output=slurm-discovqa-%j.out
 
 source ~/projects/def-sshirmoh/mhashemi/exec/set_env.sh
 cd ~/workspace/discovqa/
