@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader, random_split
 sys.path.append(os.environ['WORKSPACE_DIR'])
 # local application imports
 from datasets.LIVE_NFLX_II.livenflxii_video import LiveNFLXIIVideoHDF5
-from datasets.transforms import VideoRandomCrop
+from datasets.transforms import VideoRandomCrop, VideoNormalize
 from models.lightning import DisCoVQALightning
 
 
@@ -89,12 +89,14 @@ if __name__ == '__main__':
         logger=tb_logger,
         callbacks=[ckpt_callback, RichProgressBar()],
         log_every_n_steps=1,
-        gradient_clip_val=0.5
+        gradient_clip_val=0.8,
+        gradient_clip_algorithm="value"
     )
 
     # preparation of train and val datasets
     img_tr = [
-        VideoRandomCrop(conf['run']['resolution'])
+        VideoRandomCrop(conf['run']['resolution']),
+        VideoNormalize(mean=[0.5, 0.5, 0.5], std=[0.5,0.5,0.5])
     ]
 
     lbl_tr = [

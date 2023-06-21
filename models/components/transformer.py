@@ -40,13 +40,14 @@ class ResidualTransformerEncoder(nn.Module):
         pff = PositionWiseFeedForward(d_model, dropout=dropout)
         layer = EncoderLayer(pff, d_model, dropout=dropout)
         self.sequential = clones(layer, N)
+        self.norm = nn.LayerNorm(d_model)
 
     def forward(self, x):
         xin = x
         for layer in self.sequential:
             x, _ = layer(x)
 
-        return x + xin
+        return self.norm(x + xin)
 
 
 class TransformerDecoder(nn.Module):
