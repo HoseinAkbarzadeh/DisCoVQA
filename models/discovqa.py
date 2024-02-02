@@ -1,52 +1,32 @@
-import os
+import math
 
 import torch
 import torch.nn as nn
 
-from models.swin_video import SwinVideo
+from models.swin_video import create_pretrained_swint
 from models.components.transformer import *
-
-def create_pretrained_swint(pretrained_path=os.path.join(os.environ['SCRATCH_DIR'],
-                                                         'hub/swin_tiny_patch244_window877_kinetics400_1k.pth')):
-    model = SwinVideo()
     
-    state_dict = torch.load(pretrained_path)['state_dict']
-
-    model.load_state_dict(state_dict)
-
-    model.cls_head = nn.Identity()
-
-    del state_dict
-    return model
-    
-class TemporalDistortionAware(nn.Module):
-    def __init__(self, indim=4224, hiddim=1024, outdim=1) -> None:
-        super(TemporalDistortionAware, self).__init__()
+class MLP(nn.Module):
+    def __init__(self, indim, hiddim, outdim, dropout=0.1) -> None:
+        super(MLP, self).__init__()
 
         self.l1 = nn.Linear(indim, hiddim)
         self.act = nn.GELU()
+        self.dp0 = nn.Dropout(dropout)
         self.l2 = nn.Linear(hiddim, outdim)
+        self.dp1 = nn.Dropout(dropout)
 
     def forward(self, x):
-        return self.l2(self.act(self.l1(x)))
-    
-class TSF(nn.Module):
-    def __init__(self, sr=8) -> None:
-        super(TSF, self).__init__()
-        self.sr = sr
-    
-    def forward(self, x):
-        # input shape: [nbatch, sequence, features]
-        seq_len = x.size(1) - (x.size(1)%self.sr)
-        indices = torch.randint(0, self.sr, size=(seq_len//self.sr,)) + torch.arange(0, seq_len, self.sr)
-        return x[:, indices]
+        return self.dp1(self.l2(self.dp0(self.act(self.l1(x)))))
     
 class STDE(nn.Module):
-    def __init__(self, sample_rate=8) -> None:
+    def __init__(self, pretrained_path='hub/swin_tiny_patch244_window877_kinetics400_1k.pth',
+                 indim=4224, hiddim=2048, outdim=1, tsf_window=8) -> None:
         super(STDE, self).__init__()
 
-        self.swin_t = create_pretrained_swint()
-        self.tsf = TSF(sample_rate)
+        self.swin_t = create_pretrained_swint(pretrained_path)
+        self.mlp = MLP(indim, hiddim, outdim)
+        self.tsf_window = tsf_window
 
     def forward(self, x):
         # input shape: [nbatch, channles=3, sequene, height, width  ]
@@ -55,58 +35,102 @@ class STDE(nn.Module):
         # output shape: [nbatch, sequence, channels]
         x = torch.cat(x, dim=-1)
         # output shape: [nbatch, sequence, features]
-        x1 = x - x.roll(-1, 1)
-        x1[:,-1] = torch.zeros_like(x1[:,-1])
-        # output shape: [nbatch, sequence, 2*features]
-        return self.tsf(torch.cat((x, x1), dim=-1))
+        x = self.temporal_difference(x)
+        # output shape: [nbatch, sequence, 768]
+        # The following line is not mentioned in the paper. But 
+        # it is a workaround to make up for the final aggregation
+        x = TCT.temporal_sampling_on_features(x, self.tsf_window)
+        return self.mlp(x), x
+    
+    def temporal_difference(self, ten):
+        diff = ten - ten.roll(-1, 1)
+        diff[:, -1, :] = 0
+        return torch.cat((ten, diff), dim=-1)
     
 class TCT(nn.Module):
-    def __init__(self, in_dim=4224, d_model=768, N=4, dropout=0.0, num_heads=1) -> None:
+    def __init__(self, indim=4224, hiddim=2048, dmodel=768, outdim=16,
+                 enc_layers=4, dec_layers=2, num_heads=12, tsf_window=8, 
+                 dropout=0.1) -> None:
         super(TCT, self).__init__()
 
         # not mentioned in paper but exists in the Fig. 2
-        self.l1 = nn.Linear(in_dim, d_model)
-        self.l2 = nn.Linear(d_model, d_model)
-        self.act = nn.GELU()
-        self.dropout = nn.Dropout(dropout)
-        # transformer section
-        self.encoder = ResidualTransformerEncoder(N, d_model, dropout)
-        self.decoder = TransformerDecoder(d_model, num_heads, dropout=dropout)
+        self.mlp0 = MLP(indim, hiddim, dmodel, dropout)
+        
+        self.enc = nn.TransformerEncoder(nn.TransformerEncoderLayer(dmodel, 
+                                                                    num_heads, 
+                                                                    hiddim, 
+                                                                    dropout, 
+                                                                    batch_first=True), 
+                                         enc_layers)
+        self.dec = nn.TransformerDecoder(nn.TransformerDecoderLayer(dmodel,
+                                                                    num_heads,
+                                                                    hiddim,
+                                                                    dropout,
+                                                                    batch_first=True),
+                                         dec_layers)
+        self.mlp1 = MLP(dmodel, hiddim, outdim, dropout)
+        
+        self.tsf_window = tsf_window
 
     def forward(self, x):
         # input shape: [nbatch, sequence, features]
-        # output shape: [nbatch, sequence, features]
-        x = self.l2(self.dropout(self.act(self.l1(x))))
-        t_pe = x
-        # output shape: [nbatch, sequence, features]
-        x = self.encoder(x)
-        # output shape: [nbatch, sequence, 1]
-        return self.decoder(t_pe, x)
+        # x = self.temporal_sampling_on_features(x)
+        Tpe = self.mlp0(x)
+        
+        Ten = Tpe + self.enc(Tpe)
+        
+        Tavg = self.temporal_average_pooling(Tpe)
+        
+        Tout = Ten + self.dec(Ten, Tavg)
+        w = self.mlp1(Tout)
+        return w
+    
+    @staticmethod
+    def temporal_sampling_on_features(x, tsf_window=8):
+        # According to the paper, TSF is only applied to input features of TCT 
+        # and not to the output of STDE. However, due to descrapency in final 
+        # aggregated features, we apply TSF to the output of STDE as well.
+        # input shape: [nbatch, sequence, features]
+        B, D, C = x.shape
+        num_windows = math.ceil(D / tsf_window)
+
+        # Create a range for each start of the window
+        start_indices = torch.arange(0, D, step=tsf_window, device=x.device)
+        
+        # Generate random indices within each window
+        random_offsets = torch.randint(0, tsf_window, size=(B, num_windows), device=x.device)
+        # Ensure indices are unique and within bounds for each window segment
+        indices = torch.clamp(start_indices + random_offsets, max=D - 1)
+
+        # Indexing requires gathering along the sequence dimension
+        sampled = torch.gather(x, 1, indices.unsqueeze(-1).expand(-1, -1, C))
+        return sampled
+    
+    def temporal_average_pooling(self, x):
+        return x.mean(dim=1, keepdim=True)
     
 class DisCoVQA(nn.Module):
     t_dim = 2112
-    def __init__(self, d_model=512, num_heads=1, sample_rate=8, dropout=0.0) -> None:
+    def __init__(self, pretrained_path='hub/swin_tiny_patch244_window877_kinetics400_1k.pth', 
+                 indim=4224, hiddim=2048, dmodel=768, outdim=1, max_s=100, min_s=0,
+                 enc_layers=4, dec_layers=2, num_heads=12, tsf_window=8, 
+                 dropout=0.1) -> None:
         super(DisCoVQA, self).__init__()
 
         # STDE section in Fig 2. of the paper
-        self.stde = STDE(sample_rate)
+        self.stde = STDE(pretrained_path, indim, hiddim, outdim, tsf_window)
         # TCT section in Fig 2. of the paper
-        self.tct = TCT(self.t_dim*2, d_model, 4, dropout, num_heads)
-        # temporal distortion
-        self.temp_dist = TemporalDistortionAware(self.t_dim*2)
+        self.tct = TCT(indim, hiddim, dmodel, outdim, enc_layers, dec_layers, 
+                       num_heads, tsf_window, dropout)
+        self.lin = SigmoidReformulation(min_s, max_s)
 
     def forward(self, x):
-        # input shape [nbatch, 3, sequence, height, width]
-        # output shape [nbatch, sequence, features]
-        x_d = self.stde(x)
-        # output shape [nbatch, sequence]
-        x = self.tct(x_d).squeeze(-1)
-        # output shape [nbatch, sequence]
-        x_d = self.temp_dist(x_d).squeeze(-1)
-        # output shape [nbatch, sequence]
-        x = (x_d * x) + x_d
-        # output shape [nbatch,]
-        return x.mean(dim=-1)
+        # input shape [B, C=3, D, H, W]
+        di, x = self.stde(x)
+        wi = self.tct(x)
+
+        q = torch.mean(di.squeeze()+di.squeeze()*wi.squeeze(), dim=1)
+        return self.lin(q)
     
 
 class VQEGSuggestion(nn.Module):

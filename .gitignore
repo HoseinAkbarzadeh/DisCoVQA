@@ -161,7 +161,14 @@ cython_debug/
 
 # sensetive information
 *.code-workspace
+.devcontainer/
 
 # pytorch state_dics
 *.pth
 *test*
+*sanity*
+
+# etc
+materials/
+*.sh
+*.toml
