@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 
 from models.swin_video import create_pretrained_swint
-from models.components.transformer import *
     
 class MLP(nn.Module):
     def __init__(self, indim, hiddim, outdim, dropout=0.1) -> None:
